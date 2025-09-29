@@ -278,7 +278,6 @@
                 subrogationActive: inputs.subrogationCheck.checked
             };
 
-            // Logic for Maternite/Paternite
             if (values.type === 'maternite') {
                 inputs.maintienSalaireCheck.checked = false;
                 inputs.maintienSalaireCheck.disabled = true;
@@ -307,10 +306,10 @@
                 case 'mp':
                     totalSalaires = values.salaires[0];
                     sjrBase = totalSalaires / 30.42;
-                    ijssBruteJournaliere = sjrBase * 0.6; // Simplified
+                    // AT/MP has progressive rate, handled per day later
                     carenceCPAM = 0;
                     attestationSalaires = `<li>Salaire M-1: ${totalSalaires.toFixed(2)}€</li>`;
-                    ijssDetail = `SJR = ${totalSalaires.toFixed(2)}€ / 30.42 = ${sjrBase.toFixed(2)}€<br>IJSS/jour = ${sjrBase.toFixed(2)}€ * 60% = ${ijssBruteJournaliere.toFixed(2)}€`;
+                    ijssDetail = `SJR = ${totalSalaires.toFixed(2)}€ / 30.42 = ${sjrBase.toFixed(2)}€<br>Taux progressif: 60% (J1-28) puis 80% (dès J29)`;
                     break;
                 case 'maternite':
                     totalSalaires = values.salaires.reduce((a, b) => a + b, 0);
@@ -340,8 +339,8 @@
                     <p class="text-xs text-gray-600 space-y-1">
                         Pour calculer les Indemnités Journalières de Sécurité Sociale (IJSS), la CPAM se base sur les salaires bruts des <strong>3 mois précédant l'arrêt</strong> (ou 1 mois pour un AT/MP).
                         La somme de ces salaires est soumise à un plafond (pour la maladie, <strong>${plafondMultiplier} fois le SMIC</strong> mensuel, soit ${ (smicRef * plafondMultiplier).toFixed(2) }€).
-                        Ce total est ensuite divisé par <strong>91.25</strong> pour obtenir le <strong>Salaire Journalier de Référence (SJR)</strong>.
-                        L'IJSS brute correspond à <strong>50% de ce SJR</strong> (60% en AT/MP). Enfin, on déduit la CSG/CRDS (6.7%) pour obtenir l'IJSS nette.
+                        Ce total est ensuite divisé par <strong>91.25</strong> (ou 30.42 en AT/MP) pour obtenir le <strong>Salaire Journalier de Référence (SJR)</strong>.
+                        L'IJSS brute correspond à <strong>50% de ce SJR</strong> (60% à 80% en AT/MP). Enfin, on déduit la CSG/CRDS (6.7%) pour obtenir l'IJSS nette.
                     </p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
@@ -352,8 +351,6 @@
                     <div>
                         <p class="font-semibold">Calcul des IJSS :</p>
                         <p class="text-xs font-mono">${ijssDetail}</p>
-                        <p class="mt-2"><strong>IJSS Brute / jour : ${ijssBruteJournaliere.toFixed(2)}€</strong></p>
-                        <p><strong>IJSS Nette / jour : ${ijssNetteJournaliere.toFixed(2)}€</strong> <span class="text-xs">(après CSG/CRDS de ${(csgCrdsRate*100).toFixed(1)}%)</span></p>
                     </div>
                 </div>
                 <p class="text-xs text-gray-500 mt-2">Basé sur les articles <a href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006735515" target="_blank" class="text-indigo-600">R.323-4</a> et suivants du Code de la Sécurité Sociale, modifiés par le <a href="https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000049190547" target="_blank" class="text-indigo-600">décret n° 2024-160 du 20 février 2024</a>.</p>
@@ -404,10 +401,32 @@
                 const salaireBrutMois = values.salaires[0] || 0;
                 
                 const absence = (salaireBrutMois / joursCalendairesMois) * joursCalendairesAbsenceMois;
+                
+                let totalIjssBrutesMois = 0;
+                let ijssDetailMois = {jours60: 0, ij60: 0, jours80: 0, ij80: 0, total: 0};
+                let joursIndemnisablesCPAMMois = 0;
 
-                const joursIndemnisablesCPAMMois = Array.from({length: joursCalendairesAbsenceMois}, (_, i) => { const d = new Date(debutAbsMois); d.setUTCDate(d.getUTCDate() + i); return d; })
-                    .filter(d => (d - values.arretDebut) / (1000 * 60 * 60 * 24) >= carenceCPAM).length;
-                const totalIjssBrutesMois = ijssBruteJournaliere * joursIndemnisablesCPAMMois;
+                for(let i=0; i < joursCalendairesAbsenceMois; i++) {
+                    let currentDate = new Date(debutAbsMois);
+                    currentDate.setUTCDate(currentDate.getUTCDate() + i);
+                    let dayCountSinceStart = (currentDate - values.arretDebut) / (1000 * 60 * 60 * 24);
+                    if (dayCountSinceStart >= carenceCPAM) {
+                        joursIndemnisablesCPAMMois++;
+                        if(values.type === 'at' || values.type === 'mp') {
+                            const rate = dayCountSinceStart < 28 ? 0.6 : 0.8;
+                            if(rate === 0.6) {
+                                ijssDetailMois.jours60++;
+                                ijssDetailMois.ij60 += sjrBase * rate;
+                            } else {
+                                ijssDetailMois.jours80++;
+                                ijssDetailMois.ij80 += sjrBase * rate;
+                            }
+                            totalIjssBrutesMois += sjrBase * rate;
+                        } else {
+                            totalIjssBrutesMois += ijssBruteJournaliere;
+                        }
+                    }
+                }
                 
                 let carenceEmployeur = (values.type === 'at' || values.type === 'mp' || values.type === 'maternite') ? 0 : 7;
                 
@@ -440,7 +459,7 @@
 
                 const maintienBrutTotal = maintien90Brut + maintien66Brut;
                 
-                const ijssNettesMois = ijssNetteJournaliere * joursIndemnisablesCPAMMois;
+                const ijssNettesMois = totalIjssBrutesMois * (1 - csgCrdsRate);
                 
                 let salaireBrutSoumis = salaireBrutMois - absence;
                 if(values.maintienActif) salaireBrutSoumis += maintienBrutTotal;
