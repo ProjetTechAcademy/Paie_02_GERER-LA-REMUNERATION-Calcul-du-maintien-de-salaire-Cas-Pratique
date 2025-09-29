@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="fr" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>02_GÉRER LES ABSENCES / Le maintien de salaire / cas pratique</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Professional -->
+    <!-- Application Structure Plan: La structure est conçue comme un parcours d'apprentissage complet sur le maintien de salaire. Elle débute par le processus global (le "quoi"), puis détaille les règles légales (le "comment ça marche"). Le cœur de l'application est un simulateur interactif qui permet à l'utilisateur de calculer un cas pratique de A à Z (le "faisons-le ensemble"), incluant le calcul de l'absence, des IJSS et du maintien employeur, avec une gestion des arrêts sur deux mois et la prise en compte de différents motifs d'absence. Chaque étape du simulateur est accompagnée de calculs détaillés et d'un calendrier visuel pour une compréhension optimale. L'architecture transforme un sujet dense en un outil pratique et didactique. -->
+    <!-- Visualization & Content Choices: 
+        1. Info: Processus de l'arrêt de travail -> Goal: Organiser -> Viz: Cartes colorées en 3 étapes (HTML/Tailwind) -> Interaction: Statique. -> Justification: Clarifie le rôle de chaque acteur (Salarié, Employeur, CPAM) de manière simple et visuelle.
+        2. Info: Règles du maintien légal -> Goal: Informer -> Viz: Tableau stylisé (HTML/Tailwind) -> Interaction: Statique. -> Justification: Un tableau est la meilleure façon de présenter les droits à indemnisation en fonction de l'ancienneté.
+        3. Info: Cas pratique complet -> Goal: Simuler et Éduquer -> Viz: Calculateur interactif multi-étapes (HTML/JS) avec calendrier dynamique et simulation de bulletin de paie. -> Interaction: L'utilisateur choisit le type d'arrêt, saisit les informations du salarié et de l'arrêt. L'application calcule et affiche en temps réel l'ancienneté, la retenue, les IJSS, le maintien et le bulletin de paie, avec le détail de chaque calcul. Le calendrier surligne les jours d'absence et les périodes de carence. Le calcul se divise sur deux mois si nécessaire. -> Justification: C'est l'élément central qui rend le concept concret. Le détail des calculs et la simulation du bulletin avec subrogation répondent aux questions "combien ?", "quand ?" et "comment ça apparaît sur la paie ?".
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F7F4;
+            color: #3D405B;
+        }
+        .nav-link {
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #81B29A;
+            border-bottom-color: #81B29A;
+        }
+        .card {
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.07);
+        }
+        input, select {
+            border-color: #E0E0E0;
+        }
+        input:focus, select:focus {
+            border-color: #81B29A;
+            box-shadow: 0 0 0 2px rgba(129, 178, 154, 0.3);
+            outline: none;
+        }
+        .table-header {
+            background-color: #F3F4F6;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-50 shadow-sm">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <span class="font-bold text-lg text-gray-800">02_GÉRER LES ABSENCES</span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#processus" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700">Processus</a>
+                        <a href="#regles" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700">Règles</a>
+                        <a href="#simulateur" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700">Simulateur</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+        <div class="text-center mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">Le maintien de salaire</h1>
+            <p class="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">Un outil complet pour maîtriser la gestion d'un arrêt de travail, du calcul des indemnités au bulletin de paie.</p>
+        </div>
+
+        <section id="processus" class="mb-16 scroll-mt-20">
+            <div class="card p-6 md:p-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">🔁 Le Processus de l'Arrêt de Travail</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+                    <div class="p-4 bg-blue-100 rounded-lg border border-blue-200">
+                        <p class="font-bold text-blue-800 text-5xl">1</p>
+                        <h3 class="font-semibold text-blue-800 mt-2">Le Salarié</h3>
+                        <p class="text-sm text-blue-700 mt-2">Transmet son arrêt de travail à l'employeur et à la CPAM dans les 48h.</p>
+                    </div>
+                     <div class="p-4 bg-yellow-100 rounded-lg border border-yellow-200">
+                        <p class="font-bold text-yellow-800 text-5xl">2</p>
+                        <h3 class="font-semibold text-yellow-800 mt-2">L'Employeur</h3>
+                        <p class="text-sm text-yellow-700 mt-2">Établit une DSN événementielle pour signaler l'arrêt à la CPAM dans les 5 jours et demande la subrogation.</p>
+                    </div>
+                     <div class="p-4 bg-green-100 rounded-lg border border-green-200">
+                        <p class="font-bold text-green-800 text-5xl">3</p>
+                        <h3 class="font-semibold text-green-800 mt-2">La CPAM</h3>
+                        <p class="text-sm text-green-700 mt-2">Calcule les droits et verse les Indemnités Journalières (IJSS) directement à l'employeur.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="regles" class="mb-16 scroll-mt-20">
+            <div class="card p-6 md:p-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">📜 Les Règles du Maintien de Salaire Légal</h2>
+                <p class="text-gray-600 mb-6">En l'absence de convention collective plus favorable, la loi (articles <a href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006901170" target="_blank" class="text-indigo-600">L1226-1</a> et <a href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000018533328" target="_blank" class="text-indigo-600">D1226-1</a> du Code du travail) prévoit une indemnisation complémentaire par l'employeur.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <h4 class="font-semibold text-lg">Conditions Requises</h4>
+                         <ul class="list-disc list-inside text-sm text-gray-700 mt-2 pl-2">
+                            <li>Avoir au minimum <strong>1 an d'ancienneté</strong>.</li>
+                            <li>Avoir justifié son absence dans les 48h.</li>
+                            <li>Être pris en charge par la Sécurité Sociale.</li>
+                            <li>Être soigné sur le territoire français ou dans l'UE.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-lg">Délai de Carence</h4>
+                        <p class="text-sm text-gray-700 mt-2">Le maintien de salaire par l'employeur débute au <strong>8ème jour d'absence</strong> (7 jours de carence).<br><em class="text-xs">(Pas de délai de carence en cas d'accident de travail ou maladie professionnelle).</em></p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white border">
+                        <thead class="table-header">
+                            <tr>
+                                <th class="py-3 px-4 text-left text-sm font-semibold text-gray-700">Ancienneté</th>
+                                <th class="py-3 px-4 text-left text-sm font-semibold text-gray-700">Indemnisation à 90% du brut</th>
+                                <th class="py-3 px-4 text-left text-sm font-semibold text-gray-700">Indemnisation à 66,66% du brut</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b hover:bg-gray-50"><td class="py-2 px-4 text-sm">1 à 5 ans</td><td class="py-2 px-4 text-sm">30 jours</td><td class="py-2 px-4 text-sm">30 jours</td></tr>
+                            <tr class="border-b hover:bg-gray-50"><td class="py-2 px-4 text-sm">6 à 10 ans</td><td class="py-2 px-4 text-sm">40 jours</td><td class="py-2 px-4 text-sm">40 jours</td></tr>
+                            <tr class="border-b hover:bg-gray-50"><td class="py-2 px-4 text-sm">11 à 15 ans</td><td class="py-2 px-4 text-sm">50 jours</td><td class="py-2 px-4 text-sm">50 jours</td></tr>
+                            <tr class="border-b hover:bg-gray-50"><td class="py-2 px-4 text-sm">16 à 20 ans</td><td class="py-2 px-4 text-sm">60 jours</td><td class="py-2 px-4 text-sm">60 jours</td></tr>
+                            <tr class="border-b hover:bg-gray-50"><td class="py-2 px-4 text-sm">21 à 25 ans</td><td class="py-2 px-4 text-sm">70 jours</td><td class="py-2 px-4 text-sm">70 jours</td></tr>
+                             <tr class="border-b hover:bg-gray-50"><td class="py-2 px-4 text-sm">26 à 30 ans</td><td class="py-2 px-4 text-sm">80 jours</td><td class="py-2 px-4 text-sm">80 jours</td></tr>
+                             <tr class="hover:bg-gray-50"><td class="py-2 px-4 text-sm">Plus de 31 ans</td><td class="py-2 px-4 text-sm">90 jours</td><td class="py-2 px-4 text-sm">90 jours</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="simulateur" class="mb-16 scroll-mt-20">
+             <div class="card p-6 md:p-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">🖥️ Simulateur de Cas Pratique</h2>
+                 <div class="bg-gray-50 p-6 rounded-lg border mb-8">
+                     <h3 class="text-xl font-semibold mb-4 text-gray-700">1. Informations Salarié & Arrêt</h3>
+                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label for="typeArret" class="block text-sm font-medium text-gray-700">Type d'arrêt</label>
+                            <select id="typeArret" class="mt-1 block w-full rounded-md shadow-sm p-2">
+                                <option value="maladie">Maladie non professionnelle</option>
+                                <option value="at">Accident du travail / Trajet</option>
+                                <option value="mp">Maladie professionnelle</option>
+                                <option value="maternite">Maternité / Paternité</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="dateEntree" class="block text-sm font-medium text-gray-700">Date d'entrée</label>
+                            <input type="date" id="dateEntree" value="2017-05-30" class="mt-1 block w-full rounded-md shadow-sm p-2">
+                        </div>
+                        <div class="flex items-end space-x-4">
+                             <label class="flex items-center text-sm">
+                                <input type="checkbox" id="maintienSalaireCheck" checked class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="ml-2">Maintien Légal</span>
+                            </label>
+                            <label class="flex items-center text-sm">
+                                <input type="checkbox" id="subrogationCheck" checked class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="ml-2">Subrogation</span>
+                            </label>
+                        </div>
+                        <div>
+                            <label for="arretDebut" class="block text-sm font-medium text-gray-700">Début de l'arrêt</label>
+                            <input type="date" id="arretDebut" value="2025-04-20" class="mt-1 block w-full rounded-md shadow-sm p-2">
+                        </div>
+                        <div>
+                            <label for="arretFin" class="block text-sm font-medium text-gray-700">Fin de l'arrêt</label>
+                            <input type="date" id="arretFin" value="2025-05-10" class="mt-1 block w-full rounded-md shadow-sm p-2">
+                        </div>
+                        <div></div>
+                        <div id="salaires-container" class="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        </div>
+                    </div>
+                     <div id="maintien-info" class="hidden text-xs text-center text-orange-700 bg-orange-100 p-2 rounded-md mt-4"></div>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">2. Calendrier de l'Absence</h3>
+                    <div id="calendar-container" class="flex flex-wrap justify-center gap-8"></div>
+                     <div class="flex flex-wrap gap-4 mt-4 text-xs justify-center">
+                        <span class="flex items-center"><span class="w-4 h-4 rounded-full bg-yellow-200 mr-2"></span>Carence Employeur</span>
+                        <span class="flex items-center"><span class="w-4 h-4 rounded-full bg-green-200 mr-2"></span>Maintien Employeur</span>
+                        <span class="flex items-center"><span class="w-4 h-4 rounded-full ring-2 ring-blue-400 mr-2"></span>Carence CPAM</span>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-700">3. Simulation de l'Attestation de Salaire (CPAM)</h3>
+                    <div id="attestation-salaire" class="p-4 rounded-lg border bg-blue-50 border-blue-200"></div>
+                </div>
+
+                 <div class="mt-8">
+                     <h3 class="text-xl font-semibold mb-4 text-gray-700">4. Calculs Détaillés par Mois & Bulletins</h3>
+                     <div id="results-container" class="space-y-6">
+                     </div>
+                 </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ALL_INPUTS = [
+            'typeArret', 'dateEntree', 'arretDebut', 'arretFin', 'maintienSalaireCheck', 'subrogationCheck'
+        ];
+        const inputs = {};
+        ALL_INPUTS.forEach(id => inputs[id] = document.getElementById(id));
+        const salairesContainer = document.getElementById('salaires-container');
+        const calendarContainer = document.getElementById('calendar-container');
+        const resultsContainer = document.getElementById('results-container');
+        const attestationContainer = document.getElementById('attestation-salaire');
+        const maintienInfoDiv = document.getElementById('maintien-info');
+
+        const SMIC_TAUX_HORAIRE_2025 = 11.88;
+        const SMIC_MENSUEL_2025 = (SMIC_TAUX_HORAIRE_2025 * 35 * 52) / 12;
+        const SMIC_MENSUEL_2024 = 1766.92;
+        const DATE_REFORME_IJSS = new Date('2025-04-01T00:00:00Z');
+
+        function updateSalaireInputs() {
+            const arretDebut = inputs.arretDebut.valueAsDate;
+            if (!arretDebut) return;
+
+            salairesContainer.innerHTML = '';
+            const nbSalaires = (inputs.typeArret.value === 'at' || inputs.typeArret.value === 'mp') ? 1 : 3;
+            
+            for(let i = 1; i <= nbSalaires; i++) {
+                const date = new Date(arretDebut);
+                date.setUTCMonth(date.getUTCMonth() - i);
+                const monthName = date.toLocaleString('fr-FR', { month: 'long'});
+                
+                const div = document.createElement('div');
+                const label = document.createElement('label');
+                label.htmlFor = `salaireM${i}`;
+                label.className = "block text-sm font-medium text-gray-700";
+                label.textContent = `Salaire brut ${monthName}`;
+                
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.id = `salaireM${i}`;
+                input.className = "mt-1 block w-full rounded-md shadow-sm p-2 salaire-input";
+                if(i===1) input.value = 3500;
+                if(i===2) input.value = 2500;
+                if(i===3) input.value = 2500;
+
+                input.addEventListener('input', calculateAll);
+
+                div.appendChild(label);
+                div.appendChild(input);
+                salairesContainer.appendChild(div);
+            }
+            calculateAll();
+        }
+
+        function calculateAll() {
+            const salairesInputs = Array.from(document.querySelectorAll('.salaire-input'));
+            if (salairesInputs.length === 0) return;
+
+            const values = {
+                type: inputs.typeArret.value,
+                dateEntree: inputs.dateEntree.valueAsDate,
+                arretDebut: inputs.arretDebut.valueAsDate,
+                arretFin: inputs.arretFin.valueAsDate,
+                salaires: salairesInputs.map(i => parseFloat(i.value)),
+                maintienActif: inputs.maintienSalaireCheck.checked,
+                subrogationActive: inputs.subrogationCheck.checked
+            };
+
+            // Logic for Maternite/Paternite
+            if (values.type === 'maternite') {
+                inputs.maintienSalaireCheck.checked = false;
+                inputs.maintienSalaireCheck.disabled = true;
+                values.maintienActif = false;
+                maintienInfoDiv.classList.remove('hidden');
+                maintienInfoDiv.textContent = "Le maintien de salaire légal ne s'applique pas au congé maternité/paternité (indemnisation directe par la CPAM).";
+            } else {
+                inputs.maintienSalaireCheck.disabled = false;
+                maintienInfoDiv.classList.add('hidden');
+            }
+
+
+            if (Object.values(values).some(v => v === null || (Array.isArray(v) && v.some(s=>isNaN(s))) )) return;
+            if (values.arretFin < values.arretDebut) return;
+
+            generateCalendars(values.arretDebut, values.arretFin, values.type);
+            
+            let sjrBase = 0, ijssBruteJournaliere = 0, carenceCPAM = 3, csgCrdsRate = 0.067;
+            let ijssDetail = '', attestationSalaires = '', totalSalaires = 0;
+            
+            let smicRef = values.arretDebut >= DATE_REFORME_IJSS ? SMIC_MENSUEL_2025 : SMIC_MENSUEL_2024;
+            let plafondMultiplier = values.arretDebut >= DATE_REFORME_IJSS ? 1.4 : 1.8;
+
+            switch (values.type) {
+                case 'at':
+                case 'mp':
+                    totalSalaires = values.salaires[0];
+                    sjrBase = totalSalaires / 30.42;
+                    ijssBruteJournaliere = sjrBase * 0.6; // Simplified
+                    carenceCPAM = 0;
+                    attestationSalaires = `<li>Salaire M-1: ${totalSalaires.toFixed(2)}€</li>`;
+                    ijssDetail = `SJR = ${totalSalaires.toFixed(2)}€ / 30.42 = ${sjrBase.toFixed(2)}€<br>IJSS/jour = ${sjrBase.toFixed(2)}€ * 60% = ${ijssBruteJournaliere.toFixed(2)}€`;
+                    break;
+                case 'maternite':
+                    totalSalaires = values.salaires.reduce((a, b) => a + b, 0);
+                    const netFiscalRate = 0.21;
+                    sjrBase = (totalSalaires * (1 - netFiscalRate)) / 91.25;
+                    ijssBruteJournaliere = Math.min(sjrBase, 100.36); // Plafond IJ Maternité 2024
+                    carenceCPAM = 0;
+                    csgCrdsRate = 0;
+                    attestationSalaires = values.salaires.map((s,i) => `<li>Salaire M-${i+1}: ${s.toFixed(2)}€</li>`).join('');
+                    ijssDetail = `SJR Net = (${totalSalaires.toFixed(2)}€ * 0.79) / 91.25 = ${sjrBase.toFixed(2)}€<br>IJSS/jour = ${ijssBruteJournaliere.toFixed(2)}€ (Plafonnée)`;
+                    break;
+                case 'maladie':
+                default:
+                    totalSalaires = values.salaires.reduce((a, b) => a + b, 0);
+                    const plafondSS = smicRef * plafondMultiplier;
+                    sjrBase = Math.min(totalSalaires, plafondSS * 3) / 91.25;
+                    ijssBruteJournaliere = sjrBase * 0.5;
+                    attestationSalaires = values.salaires.map((s,i) => `<li>Salaire M-${i+1}: ${s.toFixed(2)}€</li>`).join('');
+                    ijssDetail = `Plafond SS mensuel: ${plafondMultiplier} * ${smicRef.toFixed(2)}€ = ${plafondSS.toFixed(2)}€<br>SJR = min( (${totalSalaires.toFixed(2)}€), ${(plafondSS*3).toFixed(2)}€) / 91.25 = ${sjrBase.toFixed(2)}€<br>IJSS/jour = ${sjrBase.toFixed(2)}€ * 50% = ${ijssBruteJournaliere.toFixed(2)}€`;
+            }
+            const ijssNetteJournaliere = ijssBruteJournaliere * (1 - csgCrdsRate);
+
+            attestationContainer.innerHTML = `
+                <h4 class="font-bold text-blue-800">📋 Attestation de Salaire & Calcul des IJSS</h4>
+                 <div class="p-4 bg-white rounded-lg mt-2">
+                    <h5 class="font-semibold text-gray-800 mb-2">💡 Explication du calcul des IJSS</h5>
+                    <p class="text-xs text-gray-600 space-y-1">
+                        Pour calculer les Indemnités Journalières de Sécurité Sociale (IJSS), la CPAM se base sur les salaires bruts des <strong>3 mois précédant l'arrêt</strong> (ou 1 mois pour un AT/MP).
+                        La somme de ces salaires est soumise à un plafond (pour la maladie, <strong>${plafondMultiplier} fois le SMIC</strong> mensuel, soit ${ (smicRef * plafondMultiplier).toFixed(2) }€).
+                        Ce total est ensuite divisé par <strong>91.25</strong> pour obtenir le <strong>Salaire Journalier de Référence (SJR)</strong>.
+                        L'IJSS brute correspond à <strong>50% de ce SJR</strong> (60% en AT/MP). Enfin, on déduit la CSG/CRDS (6.7%) pour obtenir l'IJSS nette.
+                    </p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
+                    <div>
+                        <p class="font-semibold">Salaires de référence (bruts) :</p>
+                        <ul class="list-disc list-inside ml-4 text-xs">${attestationSalaires}</ul>
+                    </div>
+                    <div>
+                        <p class="font-semibold">Calcul des IJSS :</p>
+                        <p class="text-xs font-mono">${ijssDetail}</p>
+                        <p class="mt-2"><strong>IJSS Brute / jour : ${ijssBruteJournaliere.toFixed(2)}€</strong></p>
+                        <p><strong>IJSS Nette / jour : ${ijssNetteJournaliere.toFixed(2)}€</strong> <span class="text-xs">(après CSG/CRDS de ${(csgCrdsRate*100).toFixed(1)}%)</span></p>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Basé sur les articles <a href="https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006735515" target="_blank" class="text-indigo-600">R.323-4</a> et suivants du Code de la Sécurité Sociale, modifiés par le <a href="https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000049190547" target="_blank" class="text-indigo-600">décret n° 2024-160 du 20 février 2024</a>.</p>
+            `;
+
+            let ancienneteYears = values.arretDebut.getUTCFullYear() - values.dateEntree.getUTCFullYear();
+            let ancienneteMonths = values.arretDebut.getUTCMonth() - values.dateEntree.getUTCMonth();
+            if (values.arretDebut.getUTCDate() < values.dateEntree.getUTCDate()) {
+                ancienneteMonths--;
+            }
+            if (ancienneteMonths < 0) {
+                ancienneteYears--;
+                ancienneteMonths += 12;
+            }
+
+            let droit90 = 0, droit66 = 0;
+            if (ancienneteYears >= 1 && ancienneteYears < 6) { droit90 = 30; droit66 = 30; }
+            else if (ancienneteYears >= 6 && ancienneteYears < 11) { droit90 = 40; droit66 = 40; }
+            else if (ancienneteYears >= 11 && ancienneteYears < 16) { droit90 = 50; droit66 = 50; }
+            else if (ancienneteYears >= 16 && ancienneteYears < 21) { droit90 = 60; droit66 = 60; }
+            else if (ancienneteYears >= 21 && ancienneteYears < 26) { droit90 = 70; droit66 = 70; }
+            else if (ancienneteYears >= 26 && ancienneteYears < 31) { droit90 = 80; droit66 = 80; }
+            else if (ancienneteYears >= 31) { droit90 = 90; droit66 = 90; }
+
+            resultsContainer.innerHTML = '';
+
+            const monthsToProcess = new Set();
+            let tempDate = new Date(values.arretDebut);
+            while(tempDate <= values.arretFin) {
+                monthsToProcess.add(`${tempDate.getUTCFullYear()}-${tempDate.getUTCMonth()}`);
+                tempDate.setUTCMonth(tempDate.getUTCMonth() + 1);
+                tempDate.setUTCDate(1);
+            }
+
+            let joursMaintenus90Utilises = 0;
+            let joursMaintenus66Utilises = 0;
+
+            monthsToProcess.forEach(monthStr => {
+                const [year, month] = monthStr.split('-').map(Number);
+                const premierJourMois = new Date(Date.UTC(year, month, 1));
+                const dernierJourMois = new Date(Date.UTC(year, month + 1, 0));
+
+                const debutAbsMois = (values.arretDebut > premierJourMois) ? values.arretDebut : premierJourMois;
+                const finAbsMois = (values.arretFin < dernierJourMois) ? values.arretFin : dernierJourMois;
+
+                const joursCalendairesAbsenceMois = Math.round((finAbsMois - debutAbsMois) / (1000 * 60 * 60 * 24)) + 1;
+                const joursCalendairesMois = new Date(year, month + 1, 0).getUTCDate();
+                const salaireBrutMois = values.salaires[0] || 0;
+                
+                const absence = (salaireBrutMois / joursCalendairesMois) * joursCalendairesAbsenceMois;
+
+                const joursIndemnisablesCPAMMois = Array.from({length: joursCalendairesAbsenceMois}, (_, i) => { const d = new Date(debutAbsMois); d.setUTCDate(d.getUTCDate() + i); return d; })
+                    .filter(d => (d - values.arretDebut) / (1000 * 60 * 60 * 24) >= carenceCPAM).length;
+                const totalIjssBrutesMois = ijssBruteJournaliere * joursIndemnisablesCPAMMois;
+                
+                let carenceEmployeur = (values.type === 'at' || values.type === 'mp' || values.type === 'maternite') ? 0 : 7;
+                
+                let joursMaintenus90Mois = 0;
+                let joursMaintenus66Mois = 0;
+                
+                if (values.maintienActif) {
+                    for(let i=0; i < joursCalendairesAbsenceMois; i++) {
+                        let currentDate = new Date(debutAbsMois);
+                        currentDate.setUTCDate(currentDate.getUTCDate() + i);
+                        let dayCountSinceStart = (currentDate - values.arretDebut) / (1000 * 60 * 60 * 24);
+
+                        if (dayCountSinceStart >= carenceEmployeur) {
+                            if (joursMaintenus90Utilises < droit90) {
+                                joursMaintenus90Mois++;
+                                joursMaintenus90Utilises++;
+                            } else if (joursMaintenus66Utilises < droit66) {
+                                joursMaintenus66Mois++;
+                                joursMaintenus66Utilises++;
+                            }
+                        }
+                    }
+                }
+
+                const salaireAMaintenir90 = (salaireBrutMois / joursCalendairesMois) * joursMaintenus90Mois;
+                const maintien90Brut = salaireAMaintenir90 * 0.90;
+
+                const salaireAMaintenir66 = (salaireBrutMois / joursCalendairesMois) * joursMaintenus66Mois;
+                const maintien66Brut = salaireAMaintenir66 * (2/3);
+
+                const maintienBrutTotal = maintien90Brut + maintien66Brut;
+                
+                const ijssNettesMois = ijssNetteJournaliere * joursIndemnisablesCPAMMois;
+                
+                let salaireBrutSoumis = salaireBrutMois - absence;
+                if(values.maintienActif) salaireBrutSoumis += maintienBrutTotal;
+                if(values.subrogationActive) salaireBrutSoumis -= totalIjssBrutesMois;
+
+                const monthName = new Date(year, month).toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
+                const monthResultHTML = `
+                    <div class="p-4 rounded-lg border bg-gray-100">
+                        <h4 class="font-bold text-lg text-indigo-700 mb-4">Paie de ${monthName}</h4>
+                        <div class="p-4 bg-white rounded-lg">
+                            <h5 class="font-semibold text-gray-800 mb-2">💡 Explication du calcul</h5>
+                            <p class="text-xs text-gray-600 space-y-1">
+                                Pour ce mois, le salarié est absent <strong>${joursCalendairesAbsenceMois} jours</strong>. On calcule d'abord la <strong>retenue sur salaire</strong>.
+                                ${values.maintienActif ? `Ensuite, on calcule le <strong>maintien de salaire brut</strong> auquel il a droit (<strong>${joursMaintenus90Mois}j à 90%</strong> et <strong>${joursMaintenus66Mois}j à 66.66%</strong> ce mois-ci).` : ''}
+                                ${values.subrogationActive ? `Avec la <strong>subrogation</strong>, l'employeur perçoit les IJSS et les reverse au salarié. Pour neutraliser leur impact sur les cotisations, on les déduit du brut avant de les réintégrer au net.` : 'Sans subrogation, le salarié perçoit les IJSS directement de la CPAM.'}
+                            </p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                            <div>
+                                <h5 class="font-semibold text-gray-800 mb-2">Calculs Détaillés</h5>
+                                <div class="space-y-4">
+                                    <div class="p-3 rounded-lg border bg-red-50 border-red-200">
+                                        <h6 class="font-bold text-red-800">1. Retenue pour Absence</h6>
+                                        <p class="text-xl font-bold text-red-900 mt-1">-${absence.toFixed(2)} €</p>
+                                        <p class="text-xs text-gray-500 mt-1 font-mono">(${salaireBrutMois.toFixed(2)}€ / ${joursCalendairesMois}j) * ${joursCalendairesAbsenceMois}j</p>
+                                    </div>
+                                    ${values.maintienActif ? `<div class="p-3 rounded-lg border bg-green-50 border-green-200">
+                                        <h6 class="font-bold text-green-800">2. Maintien de salaire Employeur (Brut)</h6>
+                                        <p class="text-xl font-bold text-green-900 mt-1">${maintienBrutTotal.toFixed(2)} €</p>
+                                        <p class="text-xs text-gray-500 mt-1 font-mono">Maintien à 90% (${joursMaintenus90Mois}j): ${maintien90Brut.toFixed(2)}€<br>Maintien à 66.66% (${joursMaintenus66Mois}j): ${maintien66Brut.toFixed(2)}€</p>
+                                    </div>` : ''}
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="font-semibold text-gray-800 mb-2">Bulletin Simplifié</h5>
+                                <table class="min-w-full bg-white border text-sm">
+                                    <tbody>
+                                        <tr class="border-b"><td class="py-1 px-2">Salaire de base</td><td class="text-right py-1 px-2">${salaireBrutMois.toFixed(2)} €</td></tr>
+                                        <tr class="border-b"><td class="py-1 px-2 text-red-600">(-) Retenue absence</td><td class="text-right py-1 px-2 text-red-600">-${absence.toFixed(2)} €</td></tr>
+                                        ${values.maintienActif ? `<tr class="border-b"><td class="py-1 px-2 text-green-600">(+) Maintien de salaire brut</td><td class="text-right py-1 px-2 text-green-600">+${maintienBrutTotal.toFixed(2)} €</td></tr>` : ''}
+                                        ${values.subrogationActive ? `<tr class="border-b"><td class="py-1 px-2 text-blue-600">(-) IJSS Brutes (non soumises)</td><td class="text-right py-1 px-2 text-blue-600">-${totalIjssBrutesMois.toFixed(2)} €</td></tr>` : ''}
+                                        <tr class="bg-gray-200 font-bold"><td class="py-1 px-2">Salaire Brut Soumis</td><td class="text-right py-1 px-2">${salaireBrutSoumis.toFixed(2)} €</td></tr>
+                                        <tr><td class="py-1 px-2 text-xs italic text-gray-500" colspan="2">... Cotisations salariales (env. 22%) ...</td></tr>
+                                        <tr class="border-t font-medium"><td class="py-1 px-2">Net après cotisations</td><td class="text-right py-1 px-2">${(salaireBrutSoumis * 0.78).toFixed(2)} €</td></tr>
+                                        ${values.subrogationActive ? `<tr class="border-t"><td class="py-1 px-2 text-blue-600">(+) IJSS Nettes</td><td class="text-right py-1 px-2 text-blue-600">+${ijssNettesMois.toFixed(2)} €</td></tr>` : ''}
+                                        <tr><td class="py-1 px-2 text-xs italic text-gray-500" colspan="2">... Prélèvement à la source ...</td></tr>
+                                        <tr class="bg-gray-200 font-bold"><td class="py-1 px-2">Net à Payer</td><td class="text-right py-1 px-2">${(salaireBrutSoumis * 0.78 + (values.subrogationActive ? ijssNettesMois : 0)).toFixed(2)} €</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+                resultsContainer.innerHTML += monthResultHTML;
+            });
+        }
+
+        function generateCalendars(debut, fin, type) {
+            calendarContainer.innerHTML = '';
+            const monthsToProcess = new Set();
+            let tempDate = new Date(debut);
+            while(tempDate <= fin) {
+                monthsToProcess.add(`${tempDate.getUTCFullYear()}-${tempDate.getUTCMonth()}`);
+                tempDate.setUTCMonth(tempDate.getUTCMonth() + 1);
+                tempDate.setUTCDate(1);
+            }
+
+            monthsToProcess.forEach(monthStr => {
+                const [year, month] = monthStr.split('-').map(Number);
+                calendarContainer.appendChild(createCalendar(year, month, debut, fin, type));
+            });
+        }
+        
+        function createCalendar(year, month, absenceStart, absenceEnd, type) {
+            const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+            const daysOfWeek = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
+
+            const firstDay = new Date(Date.UTC(year, month, 1));
+            const daysInMonth = new Date(year, month + 1, 0).getUTCDate();
+            let startingDay = firstDay.getUTCDay();
+            startingDay = startingDay === 0 ? 6 : startingDay - 1;
+
+            const calendarWrapper = document.createElement('div');
+            calendarWrapper.className = 'w-full md:w-auto flex-shrink-0 mb-4';
+            
+            let html = `<h4 class="font-bold text-center text-lg mb-2">${monthNames[month]} ${year}</h4>`;
+            html += '<div class="grid grid-cols-7 gap-1 text-sm">';
+            daysOfWeek.forEach(day => {
+                html += `<div class="text-center font-semibold text-gray-500 p-1">${day}</div>`;
+            });
+            
+            for (let i = 0; i < startingDay; i++) {
+                html += '<div></div>';
+            }
+
+            let carenceCPAM = type === 'maladie' ? 3 : 0;
+            let carenceEmployeur = (type === 'at' || type === 'mp' || type === 'maternite') ? 0 : 7;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(Date.UTC(year, month, day, 12));
+                const isAbsent = currentDate >= absenceStart && currentDate <= absenceEnd;
+                const dayCount = (currentDate - absenceStart) / (1000*60*60*24);
+                
+                let classes = 'text-center p-2 rounded-full w-8 h-8 flex items-center justify-center mx-auto';
+                if (isAbsent) {
+                    if (dayCount < carenceEmployeur && inputs.maintienSalaireCheck.checked) {
+                       classes += ' bg-yellow-200 text-yellow-800';
+                    } else if (inputs.maintienSalaireCheck.checked) {
+                       classes += ' bg-green-200 text-green-800';
+                    } else {
+                        classes += ' bg-red-200 text-red-800';
+                    }
+                    if (dayCount < carenceCPAM) {
+                       classes += ' ring-2 ring-blue-400';
+                    }
+                }
+                
+                html += `<div class="${classes}">${day}</div>`;
+            }
+
+            html += '</div>';
+            calendarWrapper.innerHTML = html;
+            return calendarWrapper;
+        }
+        
+        inputs.typeArret.addEventListener('input', updateSalaireInputs);
+        Object.values(inputs).forEach(el => el.addEventListener('input', calculateAll));
+        
+        updateSalaireInputs();
+    });
+    </script>
+</body>
+</html>
+
