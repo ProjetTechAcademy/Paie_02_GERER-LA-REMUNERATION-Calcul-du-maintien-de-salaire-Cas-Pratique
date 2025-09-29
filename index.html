@@ -228,6 +228,21 @@
         const SMIC_MENSUEL_2025 = (SMIC_TAUX_HORAIRE_2025 * 35 * 52) / 12;
         const SMIC_MENSUEL_2024 = 1766.92;
         const DATE_REFORME_IJSS = new Date('2025-04-01T00:00:00Z');
+        
+        // --- UTC Date Helpers ---
+        function daysInUtcMonth(year, month) {
+            return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+        }
+        function asUtcNoon(d) { 
+            return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12)); 
+        }
+        function diffDaysUtcInclusive(a, b) {
+            const MS_PER_DAY = 1000 * 60 * 60 * 24;
+            const start = asUtcNoon(a);
+            const end = asUtcNoon(b);
+            return Math.round((end - start) / MS_PER_DAY) + 1;
+        }
+
 
         function updateSalaireInputs() {
             const arretDebut = inputs.arretDebut.valueAsDate;
@@ -295,8 +310,9 @@
 
             generateCalendars(values.arretDebut, values.arretFin, values.type);
             
-            let sjrBase = 0, ijssBruteJournaliere = 0, carenceCPAM = 3, csgCrdsRate = 0.067;
+            let sjrBase = 0, carenceCPAM = 3, csgCrdsRate = 0.067;
             let ijssDetail = '', attestationSalaires = '', totalSalaires = 0;
+            let ijssBruteJournaliere = 0;
             
             let smicRef = values.arretDebut >= DATE_REFORME_IJSS ? SMIC_MENSUEL_2025 : SMIC_MENSUEL_2024;
             let plafondMultiplier = values.arretDebut >= DATE_REFORME_IJSS ? 1.4 : 1.8;
@@ -306,7 +322,6 @@
                 case 'mp':
                     totalSalaires = values.salaires[0];
                     sjrBase = totalSalaires / 30.42;
-                    // AT/MP has progressive rate, handled per day later
                     carenceCPAM = 0;
                     attestationSalaires = `<li>Salaire M-1: ${totalSalaires.toFixed(2)}€</li>`;
                     ijssDetail = `SJR = ${totalSalaires.toFixed(2)}€ / 30.42 = ${sjrBase.toFixed(2)}€<br>Taux progressif: 60% (J1-28) puis 80% (dès J29)`;
@@ -330,7 +345,6 @@
                     attestationSalaires = values.salaires.map((s,i) => `<li>Salaire M-${i+1}: ${s.toFixed(2)}€</li>`).join('');
                     ijssDetail = `Plafond SS mensuel: ${plafondMultiplier} * ${smicRef.toFixed(2)}€ = ${plafondSS.toFixed(2)}€<br>SJR = min( (${totalSalaires.toFixed(2)}€), ${(plafondSS*3).toFixed(2)}€) / 91.25 = ${sjrBase.toFixed(2)}€<br>IJSS/jour = ${sjrBase.toFixed(2)}€ * 50% = ${ijssBruteJournaliere.toFixed(2)}€`;
             }
-            const ijssNetteJournaliere = ijssBruteJournaliere * (1 - csgCrdsRate);
 
             attestationContainer.innerHTML = `
                 <h4 class="font-bold text-blue-800">📋 Attestation de Salaire & Calcul des IJSS</h4>
@@ -391,36 +405,25 @@
             monthsToProcess.forEach(monthStr => {
                 const [year, month] = monthStr.split('-').map(Number);
                 const premierJourMois = new Date(Date.UTC(year, month, 1));
-                const dernierJourMois = new Date(Date.UTC(year, month + 1, 0));
-
+                
                 const debutAbsMois = (values.arretDebut > premierJourMois) ? values.arretDebut : premierJourMois;
-                const finAbsMois = (values.arretFin < dernierJourMois) ? values.arretFin : dernierJourMois;
+                const finAbsMois = (values.arretFin < new Date(Date.UTC(year, month + 1, 0))) ? values.arretFin : new Date(Date.UTC(year, month + 1, 0));
 
-                const joursCalendairesAbsenceMois = Math.round((finAbsMois - debutAbsMois) / (1000 * 60 * 60 * 24)) + 1;
-                const joursCalendairesMois = new Date(year, month + 1, 0).getUTCDate();
+                const joursCalendairesAbsenceMois = diffDaysUtcInclusive(debutAbsMois, finAbsMois);
+                const joursCalendairesMois = daysInUtcMonth(year, month);
                 const salaireBrutMois = values.salaires[0] || 0;
                 
                 const absence = (salaireBrutMois / joursCalendairesMois) * joursCalendairesAbsenceMois;
                 
                 let totalIjssBrutesMois = 0;
-                let ijssDetailMois = {jours60: 0, ij60: 0, jours80: 0, ij80: 0, total: 0};
-                let joursIndemnisablesCPAMMois = 0;
-
+                
                 for(let i=0; i < joursCalendairesAbsenceMois; i++) {
                     let currentDate = new Date(debutAbsMois);
                     currentDate.setUTCDate(currentDate.getUTCDate() + i);
-                    let dayCountSinceStart = (currentDate - values.arretDebut) / (1000 * 60 * 60 * 24);
+                    let dayCountSinceStart = diffDaysUtcInclusive(values.arretDebut, currentDate) - 1;
                     if (dayCountSinceStart >= carenceCPAM) {
-                        joursIndemnisablesCPAMMois++;
                         if(values.type === 'at' || values.type === 'mp') {
                             const rate = dayCountSinceStart < 28 ? 0.6 : 0.8;
-                            if(rate === 0.6) {
-                                ijssDetailMois.jours60++;
-                                ijssDetailMois.ij60 += sjrBase * rate;
-                            } else {
-                                ijssDetailMois.jours80++;
-                                ijssDetailMois.ij80 += sjrBase * rate;
-                            }
                             totalIjssBrutesMois += sjrBase * rate;
                         } else {
                             totalIjssBrutesMois += ijssBruteJournaliere;
@@ -437,7 +440,7 @@
                     for(let i=0; i < joursCalendairesAbsenceMois; i++) {
                         let currentDate = new Date(debutAbsMois);
                         currentDate.setUTCDate(currentDate.getUTCDate() + i);
-                        let dayCountSinceStart = (currentDate - values.arretDebut) / (1000 * 60 * 60 * 24);
+                        let dayCountSinceStart = diffDaysUtcInclusive(values.arretDebut, currentDate) - 1;
 
                         if (dayCountSinceStart >= carenceEmployeur) {
                             if (joursMaintenus90Utilises < droit90) {
@@ -519,11 +522,11 @@
         function generateCalendars(debut, fin, type) {
             calendarContainer.innerHTML = '';
             const monthsToProcess = new Set();
-            let tempDate = new Date(debut);
-            while(tempDate <= fin) {
+            let tempDate = asUtcNoon(debut);
+            const endDate = asUtcNoon(fin);
+            while(tempDate <= endDate) {
                 monthsToProcess.add(`${tempDate.getUTCFullYear()}-${tempDate.getUTCMonth()}`);
                 tempDate.setUTCMonth(tempDate.getUTCMonth() + 1);
-                tempDate.setUTCDate(1);
             }
 
             monthsToProcess.forEach(monthStr => {
@@ -537,7 +540,7 @@
             const daysOfWeek = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
 
             const firstDay = new Date(Date.UTC(year, month, 1));
-            const daysInMonth = new Date(year, month + 1, 0).getUTCDate();
+            const daysInMonth = daysInUtcMonth(year, month);
             let startingDay = firstDay.getUTCDay();
             startingDay = startingDay === 0 ? 6 : startingDay - 1;
 
@@ -557,10 +560,13 @@
             let carenceCPAM = type === 'maladie' ? 3 : 0;
             let carenceEmployeur = (type === 'at' || type === 'mp' || type === 'maternite') ? 0 : 7;
 
+            const startAbs = asUtcNoon(absenceStart);
+            const endAbs = asUtcNoon(absenceEnd);
+
             for (let day = 1; day <= daysInMonth; day++) {
                 const currentDate = new Date(Date.UTC(year, month, day, 12));
-                const isAbsent = currentDate >= absenceStart && currentDate <= absenceEnd;
-                const dayCount = (currentDate - absenceStart) / (1000*60*60*24);
+                const isAbsent = currentDate >= startAbs && currentDate <= endAbs;
+                const dayCount = diffDaysUtcInclusive(absenceStart, currentDate) - 1;
                 
                 let classes = 'text-center p-2 rounded-full w-8 h-8 flex items-center justify-center mx-auto';
                 if (isAbsent) {
